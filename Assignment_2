@@ -1,0 +1,314 @@
+# ==============================================================================
+# Mini Project Assignment: GradeBook Analyzer - COMPLETE SOLUTION
+# Course: Programming for Problem Solving using Python
+# Assignment Title: Analysing and Reporting Student Grades
+#
+# Student Name: [ Yuvraj ]
+# Submission Date: 25th Nov, 2025
+#
+# This script reads student marks, performs statistical analysis, assigns grades,
+# and generates a comprehensive report via a Command Line Interface (CLI).
+# ==============================================================================
+
+import csv
+import statistics
+from typing import Dict, List, Tuple
+import sys
+
+# Define the minimum passing score
+PASS_MARK = 40
+
+# ------------------------------------------------------------------------------
+# Task 1 & 6 (Part 2): Project Setup, Initialization, and CLI Loop
+# ------------------------------------------------------------------------------
+
+def display_welcome_menu() -> None:
+    """Displays the welcome message and the main usage menu."""
+    print("\n" + "=" * 50)
+    print("      Welcome to the GradeBook Analyzer CLI")
+    print("=" * 50)
+    print("Analysis tool for student marks and grading.")
+    print("\n--- Main Menu ---")
+    print("1. Enter data manually (Student Names & Marks)")
+    print("2. Load data from a CSV file (Requires 'marks.csv' or similar)")
+    print("3. Exit Program")
+    print("-" * 20)
+
+def main_loop() -> None:
+    """The main command-line interface loop (Task 6 - User Loop)."""
+    while True:
+        display_welcome_menu()
+        choice = input("Enter your choice (1, 2, or 3): ").strip()
+
+        if choice == '1':
+            marks_data = manual_data_entry()
+            if marks_data:
+                analyze_and_report(marks_data)
+        elif choice == '2':
+            # Prompt user for the required CSV file path
+            file_path = input("Enter the path to the CSV file (e.g., marks.csv): ").strip()
+            marks_data = load_csv_data(file_path)
+            if marks_data:
+                analyze_and_report(marks_data)
+        elif choice == '3':
+            print("\nExiting the GradeBook Analyzer. Goodbye!")
+            sys.exit(0)
+        else:
+            print("\nInvalid choice. Please enter 1, 2, or 3.")
+
+# ------------------------------------------------------------------------------
+# Task 2: Data Entry or CSV Import
+# ------------------------------------------------------------------------------
+
+def manual_data_entry() -> Dict[str, int]:
+    """
+    Allows the user to manually enter student names and marks.
+    Returns a dictionary of marks: {"Name": score}
+    """
+    print("\n--- Manual Data Entry ---")
+    marks: Dict[str, int] = {}
+    print("Enter 'done' for the student name to finish input.")
+    while True:
+        name = input("Enter student name: ").strip()
+        if name.lower() == 'done':
+            break
+        if not name:
+            print("Name cannot be empty.")
+            continue
+
+        try:
+            score_input = input(f"Enter score for {name} (0-100): ").strip()
+            score = int(score_input)
+            if 0 <= score <= 100:
+                marks[name] = score
+            else:
+                print("Score must be between 0 and 100. Please try again.")
+        except ValueError:
+            print("Invalid input. Please enter a valid whole number for the score.")
+
+    return marks
+
+def load_csv_data(filepath: str) -> Dict[str, int]:
+    """
+    Loads student data from a CSV file. Assumes the CSV has 'Name' and 'Marks' columns.
+    Returns a dictionary of marks: {"Name": score}
+    """
+    print(f"\n--- Loading Data from {filepath} ---")
+    marks: Dict[str, int] = {}
+    try:
+        with open(filepath, mode='r', newline='', encoding='utf-8') as file:
+            # We use DictReader, assuming columns are titled 'Name' and 'Marks'
+            reader = csv.DictReader(file)
+            for row in reader:
+                name = row.get('Name')
+                score_str = row.get('Marks')
+                if name and score_str:
+                    try:
+                        score = int(score_str.strip())
+                        if 0 <= score <= 100:
+                            marks[name] = score
+                        # Out of range scores are ignored but warned about
+                        # else: print(f"Warning: Score for {name} ({score}) is out of range.")
+                    except ValueError:
+                        print(f"Warning: Could not convert mark '{score_str}' for {name} to a number and ignored.")
+                # else: print(f"Warning: Row {row} is missing required data.")
+        
+        print(f"Successfully loaded {len(marks)} valid student records.")
+        return marks
+    except FileNotFoundError:
+        print(f"Error: File not found at '{filepath}'. Please check the path and filename.")
+        return {}
+    except Exception as e:
+        print(f"An unexpected error occurred during CSV loading: {e}")
+        return {}
+
+# ------------------------------------------------------------------------------
+# Task 3: Statistical Analysis Functions
+# ------------------------------------------------------------------------------
+
+def calculate_average(marks_dict: Dict[str, int]) -> float:
+    """Calculates the mean (average) score."""
+    if not marks_dict:
+        return 0.0
+    # Implementation: Sum of all scores divided by the count of students
+    return sum(marks_dict.values()) / len(marks_dict)
+
+def calculate_median(marks_dict: Dict[str, int]) -> float:
+    """Calculates the median score."""
+    scores = list(marks_dict.values())
+    if not scores:
+        return 0.0
+    # Implementation: Uses the statistics module for a robust median calculation
+    return statistics.median(scores)
+
+def find_max_score(marks_dict: Dict[str, int]) -> Tuple[str, int]:
+    """Finds the student with the highest score."""
+    if not marks_dict:
+        return "N/A", 0
+    # Implementation: Use the max() function on dictionary items, keyed by the score (item[1])
+    max_name, max_score = max(marks_dict.items(), key=lambda item: item[1])
+    return max_name, max_score
+
+def find_min_score(marks_dict: Dict[str, int]) -> Tuple[str, int]:
+    """Finds the student with the lowest score."""
+    if not marks_dict:
+        return "N/A", 0
+    # Implementation: Use the min() function on dictionary items, keyed by the score (item[1])
+    min_name, min_score = min(marks_dict.items(), key=lambda item: item[1])
+    return min_name, min_score
+
+# ------------------------------------------------------------------------------
+# Task 4 & 5: Grade Assignment, Distribution, and Filtering
+# ------------------------------------------------------------------------------
+
+def assign_grade(score: int) -> str:
+    """
+    Assigns a letter grade based on the score using if...elif...else control flow.
+    Grading Scale: A: 90+, B: 80-89, C: 70-79, D: 60-69, F: <60
+    """
+    if score >= 90:
+        return "A"
+    elif score >= 80:
+        return "B"
+    elif score >= 70:
+        return "C"
+    elif score >= 60:
+        return "D"
+    else:
+        return "F"
+
+def process_grades(marks_dict: Dict[str, int]) -> Tuple[Dict[str, str], Dict[str, int]]:
+    """
+    Processes the marks to assign grades and calculate the grade distribution.
+    Returns: (grades_dict, distribution_dict)
+    """
+    grades_dict: Dict[str, str] = {}
+    # Initialize distribution dictionary with all grades
+    distribution: Dict[str, int] = {"A": 0, "B": 0, "C": 0, "D": 0, "F": 0}
+
+    for name, score in marks_dict.items():
+        grade = assign_grade(score)
+        grades_dict[name] = grade
+        # Safely increment the count for the assigned grade
+        distribution[grade] += 1
+
+    return grades_dict, distribution
+
+def filter_students(marks_dict: Dict[str, int]) -> Tuple[List[str], List[str]]:
+    """
+    Filters students into pass/fail categories using list comprehension (Task 5).
+    Pass mark is defined by the global PASS_MARK (default >= 40).
+    """
+    # List comprehension for students who passed (score >= PASS_MARK)
+    passed_students = [
+        name for name, score in marks_dict.items() if score >= PASS_MARK
+    ]
+
+    # List comprehension for students who failed (score < PASS_MARK)
+    failed_students = [
+        name for name, score in marks_dict.items() if score < PASS_MARK
+    ]
+
+    return passed_students, failed_students
+
+# ------------------------------------------------------------------------------
+# Task 6: Results Table and Report Generation
+# ------------------------------------------------------------------------------
+
+def generate_report_table(marks_dict: Dict[str, int], grades_dict: Dict[str, str]) -> None:
+    """Prints the final formatted results table (Task 6)."""
+    print("\n" + "=" * 50)
+    print("        FULL STUDENT RESULTS TABLE")
+    print("=" * 50)
+
+    # Define column widths for clean formatting
+    NAME_WIDTH = 20
+    MARK_WIDTH = 8
+    GRADE_WIDTH = 7
+    TOTAL_WIDTH = NAME_WIDTH + MARK_WIDTH + GRADE_WIDTH + 4 # 4 for spaces
+    
+    # Format string using f-strings for header and row formatting
+    HEADER_FORMAT = f"{{:<{NAME_WIDTH}}} {{:^{MARK_WIDTH}}} {{:^{GRADE_WIDTH}}}"
+    ROW_FORMAT = f"{{:<{NAME_WIDTH}}} {{:^{MARK_WIDTH}}} {{:^{GRADE_WIDTH}}}"
+
+    # Print Header
+    print(HEADER_FORMAT.format("Student Name", "Marks", "Grade"))
+    print("-" * TOTAL_WIDTH)
+
+    # Print Data Rows, sorted alphabetically by name for consistency
+    sorted_names = sorted(marks_dict.keys())
+    for name in sorted_names:
+        score = marks_dict[name]
+        grade = grades_dict.get(name, 'N/A')
+        print(ROW_FORMAT.format(name, score, grade))
+
+    print("-" * TOTAL_WIDTH)
+
+def display_summary_statistics(marks_dict: Dict[str, int], distribution: Dict[str, int], passed: List[str], failed: List[str]) -> None:
+    """Displays the statistical analysis (Task 3) and pass/fail summary (Task 5)."""
+    if not marks_dict:
+        print("No data available to generate a report.")
+        return
+
+    # Call the statistical functions (Task 3)
+    avg = calculate_average(marks_dict)
+    med = calculate_median(marks_dict)
+    max_name, max_score = find_max_score(marks_dict)
+    min_name, min_score = find_min_score(marks_dict)
+
+    print("\n" + "=" * 50)
+    print("        GRADEBOOK ANALYSIS SUMMARY")
+    print("=" * 50)
+
+    # Print Statistical Analysis
+    print("--- Statistical Metrics ---")
+    print(f"Total Students: {len(marks_dict)}")
+    print(f"Average Score:  {avg:.2f}") # Format to 2 decimal places
+    print(f"Median Score:   {med:.2f}")
+    print(f"Highest Score:  {max_score} (Achieved by: {max_name})")
+    print(f"Lowest Score:   {min_score} (Achieved by: {min_name})")
+
+    # Print Grade Distribution (Task 4)
+    print("\n--- Grade Distribution ---")
+    total_students = len(marks_dict)
+    # Sort by grade letter (A, B, C, D, F) for consistent report display
+    for grade, count in sorted(distribution.items(), key=lambda item: item[0], reverse=True):
+        percentage = (count / total_students) * 100 if total_students > 0 else 0
+        print(f"Grade {grade}: {count} students ({percentage:.1f}%)")
+
+    # Print Pass/Fail Summary (Task 5)
+    print(f"\n--- Pass/Fail Summary (Pass >= {PASS_MARK}) ---")
+    print(f"Total Passed: {len(passed)} students")
+    print(f"Passed Students: {', '.join(passed) if passed else 'None'}")
+    print(f"Total Failed: {len(failed)} students")
+    print(f"Failed Students: {', '.join(failed) if failed else 'None'}")
+    print("-" * 50)
+
+
+def analyze_and_report(marks_data: Dict[str, int]) -> None:
+    """Orchestrates the analysis and reporting steps."""
+    if not marks_data:
+        print("Analysis skipped: No valid student data was loaded.")
+        return
+
+    # 1. Assign Grades and Distribution (Task 4)
+    grades, distribution = process_grades(marks_data)
+
+    # 2. Filter Pass/Fail (Task 5)
+    passed_students, failed_students = filter_students(marks_data)
+
+    # 3. Display Summary Statistics (Task 3) and Pass/Fail (Task 5)
+    display_summary_statistics(marks_data, distribution, passed_students, failed_students)
+
+    # 4. Generate Results Table (Task 6)
+    generate_report_table(marks_data, grades)
+
+
+# ------------------------------------------------------------------------------
+# Program Entry Point
+# ------------------------------------------------------------------------------
+if __name__ == "__main__":
+    # Start the CLI loop when the script is executed
+    main_loop()
+
+# End of gradebook.py
