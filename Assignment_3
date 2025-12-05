@@ -1,0 +1,309 @@
+import json
+import logging
+import sys
+from pathlib import Path
+from typing import List, Optional
+
+# ==============================================================================
+# 📚 Project Setup and Configuration (Logging & Imports)
+# ==============================================================================
+
+# --- Configuration for Logging (Task 5) ---
+LOG_FILE = 'library_manager.log'
+# Setting up logging to both a file and the console (sys.stdout)
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    handlers=[
+                        logging.FileHandler(LOG_FILE, mode='a'),
+                        logging.StreamHandler(sys.stdout)
+                    ])
+logger = logging.getLogger('LibraryApp') # Main application logger
+
+# ==============================================================================
+# 📖 Task 1: Book Class Design
+# ==============================================================================
+
+class Book:
+    """
+    Represents a book in the library inventory, demonstrating encapsulation.
+    """
+    def __init__(self, title: str, author: str, isbn: str, status: str = 'available'):
+        """Initializes a new Book instance."""
+        self.title = title
+        self.author = author
+        self.isbn = isbn
+        # Status can be 'available' or 'issued'
+        self.status = status.lower()
+
+    def __str__(self) -> str:
+        """Returns a user-friendly string representation (Magic Method)."""
+        return f"'{self.title}' by {self.author} (ISBN: {self.isbn}) - Status: {self.status.capitalize()}"
+
+    def to_dict(self) -> dict:
+        """Returns a dictionary representation for JSON serialization."""
+        return {
+            'title': self.title,
+            'author': self.author,
+            'isbn': self.isbn,
+            'status': self.status
+        }
+
+    def issue(self) -> bool:
+        """Changes the book's status to 'issued' if available."""
+        if self.is_available():
+            self.status = 'issued'
+            return True
+        return False
+
+    def return_book(self) -> bool:
+        """Changes the book's status to 'available' if issued."""
+        if self.status == 'issued':
+            self.status = 'available'
+            return True
+        return False
+
+    def is_available(self) -> bool:
+        """Checks if the book is currently available."""
+        return self.status == 'available'
+
+# ==============================================================================
+# 📦 Tasks 2, 3, 5: Inventory Manager & File Persistence
+# ==============================================================================
+
+class LibraryInventory:
+    """
+    Manages the collection of Book objects, handles file I/O (JSON), 
+    and incorporates exception handling and logging.
+    """
+    def __init__(self, catalog_file: str = 'library_catalog.json'):
+        self.catalog_file = Path(catalog_file)
+        self.books: List[Book] = []
+        self._load_catalog()
+
+    # --- Task 3: File Persistence ---
+
+    def _load_catalog(self):
+        """Loads book catalog from JSON file, handling exceptions (Task 5)."""
+        logger.info(f"Attempting to load catalog from: {self.catalog_file}")
+        
+        try:
+            if not self.catalog_file.exists():
+                logger.warning("Catalog file not found. Starting with an empty inventory.")
+                return
+
+            with open(self.catalog_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                self.books = [
+                    Book(**d) for d in data
+                ]
+                logger.info(f"Successfully loaded {len(self.books)} books.")
+
+        except json.JSONDecodeError:
+            logger.error(f"Error: Catalog file '{self.catalog_file}' is corrupted (Invalid JSON). Starting fresh.")
+            self.books = []
+        except Exception as e:
+            logger.error(f"An unexpected error occurred during catalog loading: {e}", exc_info=True)
+            self.books = []
+        finally:
+            # Ensures a clear state even if loading failed
+            pass
+
+    def _save_catalog(self):
+        """Saves the current book catalog to the JSON file."""
+        data_to_save = [book.to_dict() for book in self.books]
+        try:
+            with open(self.catalog_file, 'w', encoding='utf-8') as f:
+                json.dump(data_to_save, f, indent=4)
+            logger.info(f"Catalog successfully saved to {self.catalog_file}")
+        except IOError as e:
+            logger.error(f"IOError: Could not write to file {self.catalog_file}: {e}")
+        except Exception as e:
+            logger.error(f"An unexpected error occurred during catalog saving: {e}", exc_info=True)
+
+    # --- Task 2: Inventory Manager Methods ---
+
+    def add_book(self, book: Book) -> bool:
+        """Adds a book to the inventory if its ISBN is unique."""
+        if any(b.isbn == book.isbn for b in self.books):
+            logger.warning(f"Add Book Failed: ISBN {book.isbn} already exists.")
+            return False
+        
+        self.books.append(book)
+        self._save_catalog()
+        logger.info(f"Book added: {book.title}")
+        return True
+
+    def search_by_title(self, title_query: str) -> List[Book]:
+        """Searches for books whose title contains the query string (case-insensitive)."""
+        return [
+            book for book in self.books 
+            if title_query.lower() in book.title.lower()
+        ]
+
+    def search_by_isbn(self, isbn_query: str) -> Optional[Book]:
+        """Searches for a book by exact ISBN match."""
+        for book in self.books:
+            if book.isbn == isbn_query:
+                return book
+        return None
+
+    def display_all(self):
+        """Prints all books in the inventory."""
+        if not self.books:
+            print("\n--- The library inventory is currently empty. ---")
+            return
+
+        print(f"\n--- Current Inventory ({len(self.books)} Books) ---")
+        for i, book in enumerate(self.books, 1):
+            print(f"{i}. {book}")
+        print("-" * 40)
+
+    # --- Methods using Book Class actions ---
+
+    def issue_book_by_isbn(self, isbn: str) -> bool:
+        """Issues a book by ISBN and saves the catalog."""
+        book = self.search_by_isbn(isbn)
+        if book and book.issue():
+            self._save_catalog()
+            logger.info(f"Book issued: {book.title} ({book.isbn})")
+            return True
+        return False
+
+    def return_book_by_isbn(self, isbn: str) -> bool:
+        """Returns a book by ISBN and saves the catalog."""
+        book = self.search_by_isbn(isbn)
+        if book and book.return_book():
+            self._save_catalog()
+            logger.info(f"Book returned: {book.title} ({book.isbn})")
+            return True
+        return False
+
+# ==============================================================================
+# 🖥️ Task 4: Menu-Driven Command Line Interface
+# ==============================================================================
+
+def print_menu():
+    """Displays the main menu options."""
+    print("\n" + "="*40)
+    print("📚 Library Inventory Manager CLI")
+    print("="*40)
+    print("1. Add New Book")
+    print("2. Issue Book")
+    print("3. Return Book")
+    print("4. View All Books")
+    print("5. Search Catalog")
+    print("6. Exit")
+    print("="*40)
+
+def get_valid_input(prompt: str, validation_func=lambda x: x.strip() != "") -> str:
+    """Helper for robust input validation and user-friendly prompts."""
+    while True:
+        try:
+            user_input = input(prompt).strip()
+            if validation_func(user_input):
+                return user_input
+            print("Invalid input. Please try again.")
+        except Exception:
+            # Handle unexpected terminal errors
+            print("An unexpected input error occurred.")
+
+def handle_add_book(inventory: LibraryInventory):
+    """Handles the Add Book menu option."""
+    print("\n--- Add New Book ---")
+    
+    title = get_valid_input("Enter Title: ")
+    author = get_valid_input("Enter Author: ")
+    isbn = get_valid_input("Enter ISBN (unique identifier): ")
+    
+    new_book = Book(title, author, isbn)
+    if inventory.add_book(new_book):
+        print(f"\n✅ Successfully added: {new_book}")
+    else:
+        print(f"\n❌ Failed to add book. ISBN '{isbn}' already exists.")
+
+def handle_issue_return(inventory: LibraryInventory, action: str):
+    """Handles the Issue Book and Return Book menu options."""
+    print(f"\n--- {action.capitalize()} Book ---")
+    isbn = get_valid_input("Enter ISBN of the book: ")
+
+    if action == 'issue':
+        if inventory.issue_book_by_isbn(isbn):
+            print(f"\n✅ Book with ISBN '{isbn}' successfully issued.")
+        else:
+            print(f"\n❌ Failed to issue book. Check if ISBN is correct or if the book is already issued/not found.")
+    
+    elif action == 'return':
+        if inventory.return_book_by_isbn(isbn):
+            print(f"\n✅ Book with ISBN '{isbn}' successfully returned.")
+        else:
+            print(f"\n❌ Failed to return book. Check if ISBN is correct or if the book was not issued/not found.")
+
+def handle_search(inventory: LibraryInventory):
+    """Handles the Search Catalog menu option."""
+    print("\n--- Search Catalog ---")
+    print("Search by: 1. Title | 2. ISBN")
+    
+    try:
+        # Validate choice to be '1' or '2'
+        choice = get_valid_input("Enter your choice (1 or 2): ", lambda x: x in ['1', '2'])
+    except Exception:
+        return
+
+    results = []
+    
+    if choice == '1':
+        query = get_valid_input("Enter part of the Title to search: ")
+        results = inventory.search_by_title(query)
+        print(f"\n--- Search Results (Title: '{query}') ---")
+
+    elif choice == '2':
+        query = get_valid_input("Enter the exact ISBN to search: ")
+        book = inventory.search_by_isbn(query)
+        if book:
+            results.append(book)
+        print(f"\n--- Search Results (ISBN: '{query}') ---")
+
+    if results:
+        for i, book in enumerate(results, 1):
+            print(f"Result {i}: {book}")
+    else:
+        print("No books found matching your query.")
+    print("-" * 40)
+
+def main():
+    """The main entry point for the CLI application."""
+    inventory = LibraryInventory()
+    
+    while True:
+        print_menu()
+        
+        try:
+            # Validate choice to be an integer between 1 and 6
+            choice = get_valid_input("Enter your choice (1-6): ", lambda x: x.isdigit() and 1 <= int(x) <= 6)
+            choice = int(choice)
+        except KeyboardInterrupt:
+            print("\n👋 Application interrupted. Exiting...")
+            sys.exit(0)
+        except Exception:
+            continue
+
+        if choice == 1:
+            handle_add_book(inventory)
+        elif choice == 2:
+            handle_issue_return(inventory, 'issue')
+        elif choice == 3:
+            handle_issue_return(inventory, 'return')
+        elif choice == 4:
+            inventory.display_all()
+        elif choice == 5:
+            handle_search(inventory)
+        elif choice == 6:
+            print("\nExiting Library Manager. Goodbye!")
+            break
+        
+        # Pause before showing the menu again
+        if choice in [1, 2, 3, 5]:
+            input("\nPress Enter to continue...")
+
+if __name__ == "__main__":
+    main()
